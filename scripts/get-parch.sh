@@ -113,6 +113,8 @@ elif [ "$OS" = "Darwin" ]; then
   echo "Installing Parch.app to ${TARGET_APP_DIR}/Parch.app..."
   rm -rf "${TARGET_APP_DIR}/Parch.app"
   cp -R "${TMP_DIR}/extracted/Parch.app" "${TARGET_APP_DIR}/"
+  touch "${TARGET_APP_DIR}/Parch.app"
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "${TARGET_APP_DIR}/Parch.app" >/dev/null 2>&1 || true
 
   # Also install CLI launcher symlink
   CLI_DIR="/usr/local/bin"

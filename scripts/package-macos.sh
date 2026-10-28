@@ -49,6 +49,11 @@ mkdir -p "${APP_DIR}/Contents/Resources"
 cp -f "${RELEASE_BIN}" "${APP_DIR}/Contents/MacOS/parch"
 chmod 755 "${APP_DIR}/Contents/MacOS/parch"
 
+cp -f "${REPO_ROOT}/packaging/icons/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
+chmod 644 "${APP_DIR}/Contents/Resources/AppIcon.icns"
+cp -f "${REPO_ROOT}/packaging/icons/parch.svg" "${APP_DIR}/Contents/Resources/parch.svg"
+chmod 644 "${APP_DIR}/Contents/Resources/parch.svg"
+
 # Info.plist registering document types for Finder "Open With"
 cat <<EOF > "${APP_DIR}/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -60,9 +65,9 @@ cat <<EOF > "${APP_DIR}/Contents/Info.plist"
     <key>CFBundleExecutable</key>
     <string>parch</string>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>AppIcon.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.kulturit.parch</string>
+    <string>io.github.oyvinvo.parch</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
