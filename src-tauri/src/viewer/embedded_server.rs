@@ -83,13 +83,11 @@ impl EmbeddedServer {
         let port = listener.local_addr()?.port();
 
         let handle = thread::spawn(move || {
-            for stream in listener.incoming() {
-                if let Ok(mut stream) = stream {
-                    let state_clone = Arc::clone(&state);
-                    thread::spawn(move || {
-                        let _ = handle_client(&mut stream, &state_clone);
-                    });
-                }
+            for mut stream in listener.incoming().flatten() {
+                let state_clone = Arc::clone(&state);
+                thread::spawn(move || {
+                    let _ = handle_client(&mut stream, &state_clone);
+                });
             }
         });
 
@@ -260,7 +258,7 @@ fn handle_api_compile_markdown(
 
     let rendered = compiler.compile(&req.raw_markdown);
     let sanitized_html = sanitizer.sanitize(&rendered.sanitized_html);
-    let byte_size = req.raw_markdown.as_bytes().len();
+    let byte_size = req.raw_markdown.len();
 
     let payload = OpenDocumentPayload {
         canonical_path: PathBuf::from(&req.filename),
@@ -284,29 +282,29 @@ pub fn detect_system_dark_mode() -> bool {
 }
 
 fn check_macos_dark_mode() -> bool {
-    let output = match Command::new("defaults")
+    if let Ok(output) = Command::new("defaults")
         .args(["read", "-g", "AppleInterfaceStyle"])
         .output()
     {
-        Ok(o) if o.status.success() => o,
-        _ => return false,
-    };
-
-    let val = String::from_utf8_lossy(&output.stdout).to_lowercase();
-    val.contains("dark")
+        if output.status.success() {
+            let val = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            return val.contains("dark");
+        }
+    }
+    false
 }
 
 fn check_gsettings_setting(key: &str, keywords: &[&str]) -> bool {
-    let output = match Command::new("gsettings")
+    if let Ok(output) = Command::new("gsettings")
         .args(["get", "org.gnome.desktop.interface", key])
         .output()
     {
-        Ok(o) if o.status.success() => o,
-        _ => return false,
-    };
-
-    let val = String::from_utf8_lossy(&output.stdout).to_lowercase();
-    keywords.iter().any(|&kw| val.contains(kw))
+        if output.status.success() {
+            let val = String::from_utf8_lossy(&output.stdout).to_lowercase();
+            return keywords.iter().any(|&kw| val.contains(kw));
+        }
+    }
+    false
 }
 
 fn handle_api_initial_state(
@@ -543,23 +541,30 @@ fn pick_file_native() -> Option<String> {
         return pick_file_macos();
     }
 
-    if let Ok(output) = Command::new("zenity")
-        .args(&[
+    pick_file_zenity().or_else(pick_file_gtk)
+}
+
+fn pick_file_zenity() -> Option<String> {
+    let output = Command::new("zenity")
+        .args([
             "--file-selection",
             "--title=Open Markdown File",
             "--file-filter=Markdown files (*.md *.markdown) | *.md *.markdown *.mdown *.mkd",
             "--file-filter=All files | *",
         ])
         .output()
-    {
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path_str.is_empty() {
-                return Some(path_str);
-            }
+        .ok()?;
+
+    if output.status.success() {
+        let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path_str.is_empty() {
+            return Some(path_str);
         }
     }
+    None
+}
 
+fn pick_file_gtk() -> Option<String> {
     let py_script = r#"
 import gi
 try:
@@ -588,15 +593,13 @@ try:
 except Exception:
     pass
 "#;
-    if let Ok(output) = Command::new("python3").arg("-c").arg(py_script).output() {
-        if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path_str.is_empty() {
-                return Some(path_str);
-            }
+    let output = Command::new("python3").args(["-c", py_script]).output().ok()?;
+    if output.status.success() {
+        let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path_str.is_empty() {
+            return Some(path_str);
         }
     }
-
     None
 }
 
@@ -607,10 +610,10 @@ fn pick_file_macos() -> Option<String> {
         return None;
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() {
-        None
-    } else {
+    if !path.is_empty() {
         Some(path)
+    } else {
+        None
     }
 }
 

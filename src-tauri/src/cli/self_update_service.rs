@@ -31,21 +31,19 @@ impl SelfUpdateService {
     }
 
     pub fn check_for_update(current_version: &str) -> CheckUpdateResponse {
-        let release_json = match Self::fetch_release_json(Some(3)) {
-            Ok(json) => json,
-            Err(_) => return Self::empty_update_response(current_version),
-        };
+        let latest_version = Self::fetch_release_json(Some(3))
+            .ok()
+            .and_then(|json| Self::parse_latest_tag(&json).ok());
 
-        let latest_version = match Self::parse_latest_tag(&release_json) {
-            Ok(tag) => tag,
-            Err(_) => return Self::empty_update_response(current_version),
-        };
+        let update_available = latest_version
+            .as_deref()
+            .map(|latest| Self::is_newer_version(current_version, latest))
+            .unwrap_or(false);
 
-        let update_available = Self::is_newer_version(current_version, &latest_version);
         CheckUpdateResponse {
             update_available,
             current_version: current_version.to_string(),
-            latest_version: Some(latest_version),
+            latest_version,
         }
     }
 
@@ -78,14 +76,6 @@ impl SelfUpdateService {
             }
         } else {
             "linux-x86_64"
-        }
-    }
-
-    fn empty_update_response(current_version: &str) -> CheckUpdateResponse {
-        CheckUpdateResponse {
-            update_available: false,
-            current_version: current_version.to_string(),
-            latest_version: None,
         }
     }
 

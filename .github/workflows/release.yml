@@ -28,27 +28,18 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
 
     steps:
-      - name: Generate GitHub App token (Optional)
-        id: app-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Run Release Please
         uses: googleapis/release-please-action@v5
         id: release
         with:
-          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
       - name: Auto-merge Release PR
         if: ${{ steps.release.outputs.pr }}
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_PR: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(echo "$RELEASE_PR" | jq -r '.number')

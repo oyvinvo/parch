@@ -57,7 +57,7 @@ impl FsDocumentReader {
         let inspect_len = bytes.len().min(BINARY_DETECTION_CHUNK_SIZE);
         let chunk = &bytes[..inspect_len];
 
-        if chunk.iter().any(|&b| b == 0x00) {
+        if chunk.contains(&0x00) {
             return Err(DocumentError::BinaryFileDetected(
                 path.to_string_lossy().to_string(),
             ));

@@ -71,10 +71,7 @@ impl ViewerLauncher {
         service: &DocumentService,
         path: Option<&Path>,
     ) -> Option<crate::document::document_service::OpenDocumentPayload> {
-        let doc_path = match path {
-            Some(p) => p,
-            None => return None,
-        };
+        let doc_path = path?;
 
         match service.open_document(doc_path) {
             Ok(payload) => Some(payload),

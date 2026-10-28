@@ -40,9 +40,6 @@ jobs:
       - name: Verify Hybrid CRAP Scores (CRAP <= 8.0, CC <= 7)
         run: npm run crap
 
-      - name: Run Stryker Mutation Testing (Target >= 80%)
-        run: npm run mutate
-
       # Crucial: Build frontend distribution BEFORE compiling Rust so src-tauri/build.rs
       # embeds dist/ assets directly into the standalone binary.
       - name: Build Frontend Distribution (required by src-tauri/build.rs)

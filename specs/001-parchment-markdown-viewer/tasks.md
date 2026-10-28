@@ -119,6 +119,7 @@
 - [x] **Task 7.2 (Self-Update Service & SemVer Engine)**: Implement `SelfUpdateService` with `parse_latest_tag`, `is_newer_version`, target platform detection (`linux-x86_64`, `macos-arm64`, `macos-x86_64`), release extraction, and installation runner adhering to $CC \le 7$.
 - [x] **Task 7.3 (Cross-Platform macOS Support)**: Add AppleInterfaceStyle dark mode detection, native macOS Finder `osascript` file selection dialog, Chrome/Brave/Edge `--app=` or fallback `open` window launcher in `embedded_server.rs` and `native_window_launcher.rs`.
 - [x] **Task 7.4 (Toolbar Release Notification Pill & API)**: Add `/api/check-update` and `/api/trigger-update` endpoints in `embedded_server.rs`, update badge in `index.html`, `parchment.css`, `tauri-ipc-adapter.ts`, and `main.ts`.
+- [x] **Task 7.5 (Workflow Cleanup & Clippy Warnings)**: Delete unneeded plantuml-wiki workflow and diagrams, update `release.yml` to use `GITHUB_TOKEN` directly, optimize `ci.yml` to keep it fast, fix clippy warnings (`question_mark` and `needless_borrows_for_generic_args` in `viewer_launcher.rs` and `embedded_server.rs`).
 
 ---
 
