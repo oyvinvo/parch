@@ -1,0 +1,52 @@
+@startuml
+!include C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+Container_Boundary(rust_boundary, "Parchment Rust Core (src-tauri/src/)") {
+    Component(cli_parser, "CliArgumentParser", "cli::CliArgumentParser", "Parses CLI arguments ([FILE], --theme, --help, --version) and determines exit codes (0, 1, 2, 3).")
+    Component(doc_service, "DocumentService", "document::DocumentService", "Coordinates loading, UTF-8/binary validation, GFM parsing, sanitization, and TOC extraction.")
+    Component(doc_reader, "FsDocumentReader", "document::FsDocumentReader", "Reads file bytes (up to 10 MiB), detects null-byte/binary signatures in first 8 KiB, and canonicalizes paths.")
+    Component(md_compiler, "MarkdownCompiler", "document::MarkdownCompiler", "Compiles GFM Markdown (tables, task lists, GitHub alerts) to HTML and extracts hierarchical TocItem outline.")
+    Component(html_sanitizer, "HtmlSanitizer", "document::HtmlSanitizer", "Sanitizes compiled HTML via ammonia allowlist, stripping <script>, event handlers, and javascript: URIs.")
+    Component(asset_resolver, "AssetPathResolver", "document::AssetPathResolver", "Resolves relative image paths and enforces directory traversal sandboxing within the document parent directory.")
+    Component(watcher_service, "FileWatcherService", "watcher::FileWatcherService", "Manages debounced (150ms) filesystem monitoring and emits change/delete events.")
+    Component(notify_adapter, "NotifyWatcherAdapter", "watcher::NotifyWatcherAdapter", "Minimal infrastructure adapter wrapping the Rust notify crate (inotify).")
+    Component(pref_service, "PreferencesService", "preferences::PreferencesService", "Validates and manages ThemeMode, font size, line width, TOC visibility, and auto-reload settings.")
+    Component(xdg_store, "XdgConfigStoreAdapter", "preferences::XdgConfigStoreAdapter", "Reads and persists config.json inside $XDG_CONFIG_HOME/parchment/config.json.")
+}
+
+Container_Boundary(ui_boundary, "Parchment Reader UI (src/)") {
+    Component(ipc_adapter, "TauriIpcAdapter", "document::TauriIpcAdapter", "Minimal adapter wrapping @tauri-apps/api invoke() and event listeners.")
+    Component(session_mgr, "DocumentSessionManager", "document::DocumentSessionManager", "Manages active document state, scroll-ratio preservation across live reloads, and DOMPurify client defense-in-depth.")
+    Component(alert_builder, "AlertCalloutBuilder", "document::AlertCalloutBuilder", "Transforms GFM [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION] blockquotes into accessible callout boxes.")
+    Component(code_mgr, "CodeBlockManager", "document::CodeBlockManager", "Applies theme-aware syntax highlighting and binds one-click clipboard copy buttons.")
+    Component(toc_mgr, "TocNavigationManager", "toc::TocNavigationManager", "Renders collapsible hierarchical TOC sidebar, handles smooth anchor scrolling, and tracks active headings via ScrollSpy.")
+    Component(search_mgr, "SearchSessionManager", "search::SearchSessionManager", "Executes in-document text matching (Ctrl+F), highlights DOM ranges, and cycles active match indices.")
+    Component(theme_mgr, "ThemeManager", "theme::ThemeManager", "Resolves System/Light/Dark/Sepia palettes, listens to OS prefers-color-scheme changes, and syncs preferences.")
+    Component(diagram_svc, "DiagramRenderService", "diagram::DiagramRenderService", "Renders Mermaid code blocks into theme-aware inline SVGs with graceful syntax error boundary disclosures.")
+    Component(math_svc, "MathRenderService", "diagram::MathRenderService", "Renders inline ($...$) and block ($$...$$) LaTeX expressions via KaTeX with non-crashing error fallback.")
+}
+
+Rel(cli_parser, doc_service, "Supplies initial file path & theme override to")
+Rel(doc_service, doc_reader, "Reads & validates file via")
+Rel(doc_service, md_compiler, "Compiles GFM & extracts outline via")
+Rel(doc_service, html_sanitizer, "Sanitizes HTML via")
+Rel(doc_service, asset_resolver, "Rewrites & sandboxes relative image paths via")
+Rel(watcher_service, notify_adapter, "Subscribes to OS file events via")
+Rel(watcher_service, doc_service, "Triggers re-read on modification via")
+Rel(pref_service, xdg_store, "Loads & persists JSON config via")
+
+Rel(session_mgr, ipc_adapter, "Calls Tauri commands & subscribes to reload events via")
+Rel(ipc_adapter, doc_service, "Invokes open_document & resolve_asset_path on", "Tauri IPC")
+Rel(ipc_adapter, pref_service, "Invokes get/set_user_preference on", "Tauri IPC")
+Rel(watcher_service, ipc_adapter, "Pushes document-file-changed/deleted events to", "Tauri Event")
+Rel(session_mgr, alert_builder, "Formats GitHub callout alerts via")
+Rel(session_mgr, code_mgr, "Enhances fenced code blocks via")
+Rel(session_mgr, toc_mgr, "Updates outline & restores scroll offset with")
+Rel(session_mgr, diagram_svc, "Renders Mermaid diagrams via")
+Rel(session_mgr, math_svc, "Renders KaTeX math expressions via")
+Rel(theme_mgr, ipc_adapter, "Persists theme_mode changes via")
+Rel(theme_mgr, diagram_svc, "Notifies palette change to re-theme SVGs")
+
+@enduml

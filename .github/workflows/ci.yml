@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-lint:
+    name: Test & Quality Gate (TypeScript & Rust)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # TypeScript / Frontend Quality Gate & Build
+      # ------------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Run ESLint & Complexity Check
+        run: npm run lint
+
+      - name: Run Vitest Suite with Coverage
+        run: npm run test:coverage
+
+      - name: Verify Hybrid CRAP Scores (CRAP <= 8.0, CC <= 7)
+        run: npm run crap
+
+      - name: Run Stryker Mutation Testing (Target >= 80%)
+        run: npm run mutate
+
+      # Crucial: Build frontend distribution BEFORE compiling Rust so src-tauri/build.rs
+      # embeds dist/ assets directly into the standalone binary.
+      - name: Build Frontend Distribution (required by src-tauri/build.rs)
+        run: npm run build
+
+      # ------------------------------------------------------------------------
+      # Rust Backend Quality Gate
+      # ------------------------------------------------------------------------
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo Dependencies & Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run Rust Core Unit & Integration Tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --verbose
+
+      - name: Run Clippy Linter
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings

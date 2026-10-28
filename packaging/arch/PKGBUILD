@@ -1,0 +1,41 @@
+# Maintainer: Oyvind Volden <oyvind.volden@gmail.com>
+pkgname=parch-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Fast, distraction-free Markdown viewer for Linux desktops"
+arch=('x86_64')
+url="https://github.com/oyvinvo/parch"
+license=('MIT')
+depends=(
+  'python-gobject'
+  'gtk3'
+  'webkit2gtk-4.1'
+  'xdg-utils'
+  'shared-mime-info'
+  'desktop-file-utils'
+)
+provides=('parch')
+conflicts=('parch')
+source=("https://github.com/oyvinvo/parch/releases/download/v${pkgver}/parch-v${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}"
+
+  # Install standalone binary
+  install -Dm755 parch "${pkgdir}/usr/bin/parch"
+
+  # Install XDG desktop entry
+  install -Dm644 packaging/parch.desktop "${pkgdir}/usr/share/applications/parch.desktop"
+
+  # Install XDG shared-mime-info definition
+  install -Dm644 packaging/parch-mime.xml "${pkgdir}/usr/share/mime/packages/parch-mime.xml"
+
+  # Install scalable hicolor application icon
+  install -Dm644 packaging/icons/parch.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/parch.svg"
+
+  # Install documentation
+  if [ -f "README.md" ]; then
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/parch/README.md"
+  fi
+}

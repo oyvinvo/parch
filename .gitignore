@@ -1,0 +1,34 @@
+# Rust build artifacts
+target/
+src-tauri/target/
+
+# Node.js dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Test coverage and mutation testing artifacts
+coverage/
+.nyc_output/
+.stryker-tmp/
+reports/
+
+# Release distribution packages
+release-dist/
+
+# Editor and OS temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Explicitly track dependency lockfiles
+!Cargo.lock
+!src-tauri/Cargo.lock
+!package-lock.json

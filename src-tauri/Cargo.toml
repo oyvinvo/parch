@@ -1,0 +1,25 @@
+[package]
+name = "parch-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Parch Contributors"]
+description = "Core domain logic and CLI for Parch Markdown Viewer"
+
+[lib]
+name = "parch_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "parch"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+ammonia = "4.0"
+notify = "7.0"
+
+[dev-dependencies]
+tempfile = "3.16"

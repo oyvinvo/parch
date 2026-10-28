@@ -1,0 +1,184 @@
+name: Release Automation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release Tag to build (e.g. v0.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release Please (SemVer & Changelog)
+    if: startsWith(github.ref, 'refs/tags/v') != true
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - name: Generate GitHub App token (Optional)
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Auto-merge Release PR
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          PR_NUMBER=$(echo "$RELEASE_PR" | jq -r '.number')
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            echo "Auto-merging Release PR #$PR_NUMBER..."
+            gh pr merge "$PR_NUMBER" --merge --auto --repo ${{ github.repository }} || gh pr merge "$PR_NUMBER" --merge --repo ${{ github.repository }}
+          fi
+
+  build-linux-assets:
+    name: Build & Publish Linux Release Assets
+    needs: release-please
+    if: |
+      always() &&
+      (
+        needs.release-please.outputs.release_created == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Packaging Utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm alien
+
+      - name: Determine Release Version & Tag
+        run: |
+          if [ -n "${{ needs.release-please.outputs.tag_name }}" ]; then
+            TAG="${{ needs.release-please.outputs.tag_name }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${TAG#v}" >> $GITHUB_ENV
+          echo "Building Linux assets for release tag: ${TAG}"
+
+      - name: Build & Package Linux Release Artifacts (.deb, .tar.gz, .rpm, SHA256SUMS)
+        run: |
+          chmod +x scripts/package-release.sh
+          ./scripts/package-release.sh "$RELEASE_VERSION"
+
+      - name: Publish Linux Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            release-dist/*.deb
+            release-dist/*.tar.gz
+            release-dist/*.rpm
+            release-dist/SHA256SUMS
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos-assets:
+    name: Build & Publish macOS Release Assets
+    needs: release-please
+    if: |
+      always() &&
+      (
+        needs.release-please.outputs.release_created == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Determine Release Version & Tag
+        run: |
+          if [ -n "${{ needs.release-please.outputs.tag_name }}" ]; then
+            TAG="${{ needs.release-please.outputs.tag_name }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          echo "RELEASE_TAG=${TAG}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${TAG#v}" >> $GITHUB_ENV
+          echo "Building macOS assets for release tag: ${TAG}"
+
+      - name: Build & Package macOS Artifacts (Parch.app zip, tar.gz)
+        run: |
+          chmod +x scripts/package-macos.sh
+          ./scripts/package-macos.sh "$RELEASE_VERSION"
+
+      - name: Publish macOS Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            release-dist/Parch-*-macos-*.zip
+            release-dist/parch-*-macos-*.tar.gz
+            release-dist/SHA256SUMS-macos.txt
+          token: ${{ secrets.GITHUB_TOKEN }}

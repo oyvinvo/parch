@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="parchmentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF8E7"/>
+      <stop offset="50%" stop-color="#FBF0D9"/>
+      <stop offset="100%" stop-color="#F0DEBA"/>
+    </linearGradient>
+    <linearGradient id="curlGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5CBA1"/>
+      <stop offset="100%" stop-color="#CBB085"/>
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#2C221E" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Parchment Scroll Sheet with Shadow -->
+  <path d="M 24 16 
+           C 24 16, 88 16, 96 16 
+           C 104 16, 108 22, 108 28 
+           L 108 100 
+           C 108 106, 102 112, 94 112 
+           L 24 112 
+           C 18 112, 14 106, 14 100 
+           L 14 24 
+           C 14 18, 18 16, 24 16 Z" 
+        fill="url(#parchmentGrad)" 
+        stroke="#8C4303" 
+        stroke-width="3" 
+        filter="url(#dropShadow)"/>
+
+  <!-- Scroll Top & Bottom Rolled Edge Highlights -->
+  <path d="M 14 26 C 14 20, 20 18, 26 18 L 94 18 C 100 18, 106 22, 106 28" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="2" 
+        opacity="0.8"/>
+
+  <!-- Markdown Stylized M Symbol -->
+  <path d="M 32 44 L 32 76 L 42 76 L 50 60 L 58 76 L 68 76 L 68 44 L 58 44 L 58 64 L 50 48 L 42 64 L 42 44 Z" 
+        fill="#8C4303"/>
+
+  <!-- Down/Right Arrow for Markdown Symbol -->
+  <path d="M 80 50 L 92 62 L 86 62 L 86 76 L 74 76 L 74 62 L 68 62 Z" 
+        fill="#2C221E"/>
+
+  <!-- Literary Document Text Lines -->
+  <line x1="32" y1="88" x2="96" y2="88" stroke="#8C4303" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
+  <line x1="32" y1="96" x2="82" y2="96" stroke="#8C4303" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+
+  <!-- Subtle corner curl -->
+  <path d="M 94 112 C 100 112, 108 106, 108 100 L 96 100 C 94 100, 94 108, 94 112 Z" 
+        fill="url(#curlGrad)" 
+        stroke="#8C4303" 
+        stroke-width="1.5"/>
+</svg>

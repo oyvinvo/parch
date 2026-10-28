@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Parch
+GenericName=Markdown Viewer
+Comment=Distraction-free literary Markdown reader
+Exec=parch %F
+Icon=parch
+Terminal=false
+Categories=Office;Viewer;
+MimeType=text/markdown;text/x-markdown;text/plain;
+StartupNotify=true
+StartupWMClass=parch
+Keywords=markdown;viewer;reader;docs;documentation;

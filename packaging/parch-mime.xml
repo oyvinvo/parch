@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/markdown">
+    <comment>Markdown document</comment>
+    <comment xml:lang="no">Markdown-dokument</comment>
+    <generic-icon name="text-x-generic"/>
+    <glob pattern="*.md"/>
+    <glob pattern="*.markdown"/>
+    <glob pattern="*.mdown"/>
+    <glob pattern="*.mkd"/>
+  </mime-type>
+  <mime-type type="text/x-markdown">
+    <comment>Markdown document</comment>
+    <generic-icon name="text-x-generic"/>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.md"/>
+    <glob pattern="*.markdown"/>
+  </mime-type>
+</mime-info>

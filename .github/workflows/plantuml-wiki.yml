@@ -1,0 +1,77 @@
+name: plantuml-wiki
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "doc/**/*.puml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plantuml-wiki
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Render C4 PlantUML Diagrams to Wiki
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch C4 PlantUML library
+        run: |
+          git clone --depth 1 https://github.com/adrianvlupu/C4-PlantUML.git .c4
+          cp .c4/*.puml doc/
+
+      - name: Checkout GitHub Wiki
+        run: |
+          git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki
+          mkdir -p wiki/diagrams
+
+      - name: Render PlantUML diagrams to PNG
+        run: |
+          while IFS= read -r -d '' file; do
+            echo "Rendering $file to PNG..."
+            docker run --rm \
+              -u "$(id -u):$(id -g)" \
+              -v "$PWD":/work \
+              -w /work \
+              plantuml/plantuml:latest \
+              -tpng "$file" -o /work/wiki/diagrams
+          done < <(find doc -type f -name "*.puml" ! -name "C4*.puml" -print0)
+
+      - name: Build Architecture page
+        run: |
+          cat > wiki/Architecture.md <<'EOF'
+          # Architecture
+
+          Auto-generated C4 diagrams rendered from `doc/*.puml`.
+
+          ## Context Diagram
+          ![Context diagram](diagrams/context.png)
+
+          ## Container Diagram
+          ![Container diagram](diagrams/container.png)
+
+          ## Component Diagram
+          ![Component diagram](diagrams/component.png)
+          EOF
+
+      - name: Commit and push to GitHub Wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "docs: update architecture diagrams rendered from ${{ github.sha }}"
+          git push
