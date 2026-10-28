@@ -91,4 +91,96 @@ describe('DocumentSessionManager', () => {
     await defaultManager.loadDocument('/fail.md');
     expect(defaultManager.getState().errorMessage).toBe('Plain string error');
   });
+
+  describe('History navigation (navigateToDocument, goBack, goForward)', () => {
+    const docA: DocumentPayload = {
+      canonicalPath: '/docs/docA.md',
+      displayName: 'docA.md',
+      rawMarkdown: '# Doc A',
+      sanitizedHtml: '<h1>Doc A</h1>',
+      outline: [],
+      byteSize: 100,
+    };
+
+    const docB: DocumentPayload = {
+      canonicalPath: '/docs/docB.md',
+      displayName: 'docB.md',
+      rawMarkdown: '# Doc B',
+      sanitizedHtml: '<h1>Doc B</h1>',
+      outline: [],
+      byteSize: 200,
+    };
+
+    const docC: DocumentPayload = {
+      canonicalPath: '/docs/docC.md',
+      displayName: 'docC.md',
+      rawMarkdown: '# Doc C',
+      sanitizedHtml: '<h1>Doc C</h1>',
+      outline: [],
+      byteSize: 300,
+    };
+
+    it('returns false for canGoBack and canGoForward initially', () => {
+      expect(sessionManager.canGoBack()).toBe(false);
+      expect(sessionManager.canGoForward()).toBe(false);
+      expect(sessionManager.goBack()).toBeNull();
+      expect(sessionManager.goForward()).toBeNull();
+    });
+
+    it('records history when navigating between documents', async () => {
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docA);
+      await sessionManager.navigateToDocument('/docs/docA.md', 0);
+      expect(sessionManager.getState().currentDocument?.displayName).toBe('docA.md');
+      expect(sessionManager.canGoBack()).toBe(false);
+
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docB);
+      await sessionManager.navigateToDocument('/docs/docB.md', 150);
+      expect(sessionManager.getState().currentDocument?.displayName).toBe('docB.md');
+      expect(sessionManager.canGoBack()).toBe(true);
+      expect(sessionManager.canGoForward()).toBe(false);
+
+      const prev = sessionManager.goBack(250);
+      expect(prev).not.toBeNull();
+      expect(prev?.doc.displayName).toBe('docA.md');
+      expect(prev?.scrollTop).toBe(150);
+      expect(sessionManager.getState().currentDocument?.displayName).toBe('docA.md');
+      expect(sessionManager.canGoBack()).toBe(false);
+      expect(sessionManager.canGoForward()).toBe(true);
+
+      const next = sessionManager.goForward(50);
+      expect(next).not.toBeNull();
+      expect(next?.doc.displayName).toBe('docB.md');
+      expect(next?.scrollTop).toBe(250);
+      expect(sessionManager.getState().currentDocument?.displayName).toBe('docB.md');
+      expect(sessionManager.canGoBack()).toBe(true);
+      expect(sessionManager.canGoForward()).toBe(false);
+    });
+
+    it('clears forward stack when navigating to a new document after going back', async () => {
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docA);
+      await sessionManager.navigateToDocument('/docs/docA.md');
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docB);
+      await sessionManager.navigateToDocument('/docs/docB.md');
+
+      sessionManager.goBack();
+      expect(sessionManager.canGoForward()).toBe(true);
+
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docC);
+      await sessionManager.navigateToDocument('/docs/docC.md');
+      expect(sessionManager.canGoForward()).toBe(false);
+      expect(sessionManager.canGoBack()).toBe(true);
+    });
+
+    it('clears history stacks on resetToEmptyState', async () => {
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docA);
+      await sessionManager.navigateToDocument('/docs/docA.md');
+      vi.mocked(mockIpc.openDocument).mockResolvedValueOnce(docB);
+      await sessionManager.navigateToDocument('/docs/docB.md');
+
+      expect(sessionManager.canGoBack()).toBe(true);
+      sessionManager.resetToEmptyState();
+      expect(sessionManager.canGoBack()).toBe(false);
+      expect(sessionManager.canGoForward()).toBe(false);
+    });
+  });
 });

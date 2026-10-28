@@ -267,6 +267,25 @@ body {
   border-color: var(--border-color);
 }
 
+.parchment-tool-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.parchment-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.parchment-nav-btn {
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  min-width: 32px;
+}
+
 /* Floating Search Bar */
 .parchment-search-bar {
   position: absolute;

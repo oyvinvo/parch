@@ -30,6 +30,11 @@ struct OpenDocRequest {
     path: String,
 }
 
+#[derive(Deserialize)]
+struct OpenExternalRequest {
+    url: String,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompileMarkdownRequest {
@@ -161,6 +166,7 @@ fn dispatch_api_request(
         ("/api/initial-state", "GET") => handle_api_initial_state(stream, state),
         ("/api/compile-markdown", "POST") => handle_api_compile_markdown(stream, body),
         ("/api/open-document", "POST") => handle_api_open_document(stream, state, body),
+        ("/api/open-external", "POST") => handle_api_open_external(stream, body),
         ("/api/pick-file", "POST") => handle_api_pick_file(stream),
         ("/api/preferences", "GET") => handle_api_get_preferences(stream, state),
         ("/api/preferences", "POST") => handle_api_set_preference(stream, state, body),
@@ -323,6 +329,21 @@ fn handle_api_initial_state(
     send_json_response(stream, 200, &response)
 }
 
+pub fn resolve_document_path(raw_path: &str, current_doc: Option<&Path>) -> PathBuf {
+    let cleaned = raw_path.strip_prefix("file://").unwrap_or(raw_path);
+    let decoded = url_decode(cleaned);
+    let path = PathBuf::from(&decoded);
+    if path.is_absolute() {
+        path
+    } else {
+        let base_dir = current_doc
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        base_dir.join(path)
+    }
+}
+
 fn handle_api_open_document(
     stream: &mut TcpStream,
     state: &Arc<RwLock<ServerState>>,
@@ -333,16 +354,45 @@ fn handle_api_open_document(
         Err(_) => return send_error_response(stream, 400, "Invalid JSON body"),
     };
 
-    let target_path = PathBuf::from(&req.path);
+    let target_path = {
+        let s = state.read().unwrap();
+        resolve_document_path(&req.path, s.current_path.as_deref())
+    };
+
     let mut s = state.write().unwrap();
     match s.document_service.open_document(&target_path) {
         Ok(payload) => {
-            s.current_path = Some(target_path.clone());
-            s.last_mtime = fs::metadata(&target_path).ok().and_then(|m| m.modified().ok());
+            s.current_path = Some(payload.canonical_path.clone());
+            s.last_mtime = fs::metadata(&payload.canonical_path).ok().and_then(|m| m.modified().ok());
             s.last_exists = true;
             send_json_response(stream, 200, &payload)
         }
         Err(err) => send_error_response(stream, 404, &err.to_string()),
+    }
+}
+
+fn handle_api_open_external(
+    stream: &mut TcpStream,
+    body: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let req: OpenExternalRequest = match serde_json::from_str(body) {
+        Ok(r) => r,
+        Err(_) => return send_error_response(stream, 400, "Invalid JSON body"),
+    };
+
+    if !req.url.starts_with("http://") && !req.url.starts_with("https://") {
+        return send_error_response(stream, 400, "Invalid URL: only http:// and https:// supported");
+    }
+
+    open_in_browser(&req.url);
+    send_json_response(stream, 200, &serde_json::json!({ "success": true }))
+}
+
+fn open_in_browser(url: &str) {
+    if cfg!(target_os = "macos") {
+        let _ = Command::new("open").arg(url).spawn();
+    } else {
+        let _ = Command::new("xdg-open").arg(url).spawn();
     }
 }
 
@@ -917,5 +967,92 @@ mod tests {
         assert!(res.contains("HTTP/1.1 200 OK"));
         assert!(res.contains("updateAvailable"));
         assert!(res.contains("currentVersion"));
+    }
+
+    #[test]
+    fn test_resolve_document_path_absolute() {
+        let current = Path::new("/home/user/docs/spec.md");
+        let resolved = resolve_document_path("/var/log/test.md", Some(current));
+        assert_eq!(resolved, PathBuf::from("/var/log/test.md"));
+    }
+
+    #[test]
+    fn test_resolve_document_path_relative_with_current_doc() {
+        let current = Path::new("/home/user/docs/spec.md");
+        let resolved = resolve_document_path("sub/plan.md", Some(current));
+        assert_eq!(resolved, PathBuf::from("/home/user/docs/sub/plan.md"));
+
+        let resolved_parent = resolve_document_path("../README.md", Some(current));
+        assert_eq!(resolved_parent, PathBuf::from("/home/user/docs/../README.md"));
+    }
+
+    #[test]
+    fn test_resolve_document_path_file_url_and_percent_decoding() {
+        let current = Path::new("/home/user/docs/spec.md");
+        let resolved = resolve_document_path("file:///var/my%20notes/test%20file.md", Some(current));
+        assert_eq!(resolved, PathBuf::from("/var/my notes/test file.md"));
+
+        let rel_resolved = resolve_document_path("file://sub%20folder/note.md", Some(current));
+        assert_eq!(rel_resolved, PathBuf::from("/home/user/docs/sub folder/note.md"));
+    }
+
+    #[test]
+    fn test_resolve_document_path_without_current_doc() {
+        let cwd = std::env::current_dir().unwrap();
+        let resolved = resolve_document_path("relative_file.md", None);
+        assert_eq!(resolved, cwd.join("relative_file.md"));
+    }
+
+    #[test]
+    fn test_open_external_endpoint_validation() {
+        let dir = tempdir().unwrap();
+        let doc_service = DocumentService::new(
+            FsDocumentReader::new(),
+            MarkdownCompiler::new(),
+            HtmlSanitizer::new(),
+            AssetPathResolver::new(),
+        );
+        let pref_service = PreferencesService::new(dir.path().join("config.json"));
+
+        let state = Arc::new(RwLock::new(ServerState {
+            current_path: None,
+            cli_theme: None,
+            initial_payload: None,
+            document_service: doc_service,
+            preferences_service: pref_service,
+            last_mtime: None,
+            last_exists: false,
+            dist_dir: dir.path().to_path_buf(),
+        }));
+
+        let server = EmbeddedServer::start(state).expect("Server should start");
+
+        // Invalid scheme
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{}", server.port())).unwrap();
+        let bad_payload = r#"{"url":"javascript:alert(1)"}"#;
+        let req = format!(
+            "POST /api/open-external HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            server.port(),
+            bad_payload.len(),
+            bad_payload
+        );
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut res = String::new();
+        stream.read_to_string(&mut res).unwrap();
+        assert!(res.contains("HTTP/1.1 400 Error"));
+
+        // Valid https
+        let mut stream2 = TcpStream::connect(format!("127.0.0.1:{}", server.port())).unwrap();
+        let good_payload = r#"{"url":"https://example.com"}"#;
+        let req2 = format!(
+            "POST /api/open-external HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            server.port(),
+            good_payload.len(),
+            good_payload
+        );
+        stream2.write_all(req2.as_bytes()).unwrap();
+        let mut res2 = String::new();
+        stream2.read_to_string(&mut res2).unwrap();
+        assert!(res2.contains("HTTP/1.1 200 OK"));
     }
 }

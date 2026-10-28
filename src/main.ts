@@ -43,6 +43,7 @@ class ParchApplication {
     this.setupTheme();
     this.setupShortcuts();
     this.setupToolbarActions();
+    this.setupDocumentLinkInterceptor();
     this.setupTocActions();
     this.setupSearchActions();
     this.setupFileWatcherListeners();
@@ -71,11 +72,31 @@ class ParchApplication {
 
   private setupShortcuts(): void {
     window.addEventListener('keydown', (e) => {
+      if (this.handleNavigationShortcuts(e)) {
+        return;
+      }
       if (this.handleCtrlKeyShortcuts(e)) {
         return;
       }
       this.handleFunctionKeyShortcuts(e);
     });
+  }
+
+  private handleNavigationShortcuts(e: KeyboardEvent): boolean {
+    if (!e.altKey) {
+      return false;
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      this.handleNavigateBack();
+      return true;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      this.handleNavigateForward();
+      return true;
+    }
+    return false;
   }
 
   private handleCtrlKeyShortcuts(e: KeyboardEvent): boolean {
@@ -116,21 +137,39 @@ class ParchApplication {
   }
 
   private setupToolbarActions(): void {
+    this.setupHistoryToolbarActions();
+    this.setupFileToolbarActions();
+    this.setupSidebarToolbarActions();
+  }
+
+  private setupHistoryToolbarActions(): void {
+    document.getElementById('btn-nav-back')?.addEventListener('click', () => {
+      this.handleNavigateBack();
+    });
+    document.getElementById('btn-nav-forward')?.addEventListener('click', () => {
+      this.handleNavigateForward();
+    });
+  }
+
+  private setupFileToolbarActions(): void {
     document.getElementById('btn-open-file')?.addEventListener('click', () => {
       void this.triggerFileOpen();
     });
     document.getElementById('btn-empty-open')?.addEventListener('click', () => {
       void this.triggerFileOpen();
     });
+    document.getElementById('btn-load-sample')?.addEventListener('click', () => this.loadShowcaseSample());
+    this.setupUpdateBadgeAction();
+    this.setupFileInput();
+  }
+
+  private setupSidebarToolbarActions(): void {
     document.getElementById('btn-toggle-toc')?.addEventListener('click', () => this.toggleTocSidebar());
     document.getElementById('btn-toggle-search')?.addEventListener('click', () => this.toggleSearchBar());
     document.getElementById('btn-theme-selector')?.addEventListener('click', () => {
       this.themeManager.cycleTheme();
       this.updateThemeButtonLabel();
     });
-    document.getElementById('btn-load-sample')?.addEventListener('click', () => this.loadShowcaseSample());
-    this.setupUpdateBadgeAction();
-    this.setupFileInput();
   }
 
   private setupUpdateBadgeAction(): void {
@@ -180,7 +219,8 @@ class ParchApplication {
   private async triggerFileOpen(): Promise<void> {
     const nativePath = await this.ipc.pickFile?.();
     if (nativePath) {
-      await this.sessionManager.loadDocument(nativePath);
+      const viewer = document.getElementById('document-viewer');
+      await this.sessionManager.navigateToDocument(nativePath, viewer?.scrollTop ?? 0);
       const state = this.sessionManager.getState();
       if (state.currentDocument) {
         this.renderDocument(state.currentDocument);
@@ -413,6 +453,117 @@ class ParchApplication {
     this.updateContentBody(doc.sanitizedHtml);
     this.updateTocOutline(doc);
     this.updateViewerScroll(viewer, oldScroll, oldHeight, preserveScroll);
+    this.updateHistoryButtons();
+  }
+
+  private setupDocumentLinkInterceptor(): void {
+    const content = document.getElementById('document-content');
+    content?.addEventListener('click', (e) => {
+      const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+      if (!link) {
+        return;
+      }
+      const href = link.getAttribute('href');
+      if (!href) {
+        return;
+      }
+      this.handleAnchorClick(e, href);
+    });
+  }
+
+  private handleAnchorClick(e: MouseEvent, href: string): void {
+    if (href.startsWith('#')) {
+      e.preventDefault();
+      this.scrollToAnchor(href.slice(1));
+      return;
+    }
+    if (this.isExternalUrl(href)) {
+      e.preventDefault();
+      void this.ipc.openExternal?.(href);
+      return;
+    }
+    e.preventDefault();
+    void this.handleLocalDocumentLink(href);
+  }
+
+  private isExternalUrl(href: string): boolean {
+    return href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:');
+  }
+
+  private scrollToAnchor(anchorId: string): void {
+    const targetEl = document.getElementById(anchorId);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  private async handleLocalDocumentLink(href: string): Promise<void> {
+    const [filePath, hashAnchor] = this.splitHrefAnchor(href);
+    await this.openLinkedMarkdown(filePath, hashAnchor);
+  }
+
+  private splitHrefAnchor(href: string): [string, string | undefined] {
+    const hashIdx = href.indexOf('#');
+    if (hashIdx === -1) {
+      return [href, undefined];
+    }
+    return [href.slice(0, hashIdx), href.slice(hashIdx + 1)];
+  }
+
+  private async openLinkedMarkdown(filePath: string, hashAnchor?: string): Promise<void> {
+    const viewer = document.getElementById('document-viewer');
+    const currentScroll = viewer?.scrollTop ?? 0;
+
+    await this.sessionManager.navigateToDocument(filePath, currentScroll);
+    const state = this.sessionManager.getState();
+    if (!state.currentDocument) {
+      return;
+    }
+
+    this.renderDocument(state.currentDocument, false);
+
+    if (hashAnchor) {
+      this.scrollToAnchor(hashAnchor);
+    } else if (viewer) {
+      viewer.scrollTop = 0;
+    }
+  }
+
+  private handleNavigateBack(): void {
+    const viewer = document.getElementById('document-viewer');
+    const prev = this.sessionManager.goBack(viewer?.scrollTop ?? 0);
+    if (!prev) {
+      return;
+    }
+    this.renderDocument(prev.doc, false);
+    if (viewer) {
+      viewer.scrollTop = prev.scrollTop;
+    }
+    void this.ipc.openDocument(prev.doc.canonicalPath).catch(() => {});
+  }
+
+  private handleNavigateForward(): void {
+    const viewer = document.getElementById('document-viewer');
+    const next = this.sessionManager.goForward(viewer?.scrollTop ?? 0);
+    if (!next) {
+      return;
+    }
+    this.renderDocument(next.doc, false);
+    if (viewer) {
+      viewer.scrollTop = next.scrollTop;
+    }
+    void this.ipc.openDocument(next.doc.canonicalPath).catch(() => {});
+  }
+
+  private updateHistoryButtons(): void {
+    const btnBack = document.getElementById('btn-nav-back') as HTMLButtonElement | null;
+    const btnForward = document.getElementById('btn-nav-forward') as HTMLButtonElement | null;
+    if (btnBack) {
+      btnBack.disabled = !this.sessionManager.canGoBack();
+    }
+    if (btnForward) {
+      btnForward.disabled = !this.sessionManager.canGoForward();
+    }
   }
 
   private updateActiveFileName(displayName: string): void {

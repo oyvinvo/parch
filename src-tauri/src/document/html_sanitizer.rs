@@ -1,4 +1,4 @@
-use ammonia::Builder;
+use ammonia::{Builder, UrlRelative};
 
 #[derive(Debug, Default, Clone)]
 pub struct HtmlSanitizer;
@@ -10,6 +10,9 @@ impl HtmlSanitizer {
 
     pub fn sanitize(&self, html: &str) -> String {
         let mut builder = Builder::default();
+
+        builder.url_relative(UrlRelative::PassThrough);
+        builder.add_url_schemes(&["file"]);
 
         builder.add_tags(&["aside", "mark", "input"]);
 
@@ -31,6 +34,17 @@ impl HtmlSanitizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_relative_and_file_links_preserved() {
+        let sanitizer = HtmlSanitizer::new();
+        let html = r##"<a href="./other.md#section">Other</a><a href="#heading-1">Jump</a><a href="file:///tmp/test.md">Local</a>"##;
+        let clean = sanitizer.sanitize(html);
+
+        assert!(clean.contains(r#"href="./other.md#section""#));
+        assert!(clean.contains(r##"href="#heading-1""##));
+        assert!(clean.contains(r#"href="file:///tmp/test.md""#));
+    }
 
     #[test]
     fn test_script_tags_are_stripped() {

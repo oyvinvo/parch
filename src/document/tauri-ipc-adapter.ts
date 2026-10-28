@@ -30,6 +30,7 @@ export interface IIpcAdapter {
   compileMarkdown?(filename: string, rawMarkdown: string): Promise<DocumentPayload>;
   checkUpdate?(): Promise<CheckUpdateResponse>;
   triggerUpdate?(): Promise<TriggerUpdateResponse>;
+  openExternal?(url: string): Promise<void>;
 }
 
 export class TauriIpcAdapter implements IIpcAdapter {
@@ -170,6 +171,27 @@ export class TauriIpcAdapter implements IIpcAdapter {
       return { success: false, message: response.statusText };
     } catch (err) {
       return { success: false, message: String(err) };
+    }
+  }
+
+  async openExternal(url: string): Promise<void> {
+    if (url.startsWith('mailto:')) {
+      if (typeof window !== 'undefined' && typeof window.open === 'function') {
+        window.open(url, '_self');
+      }
+      return;
+    }
+
+    try {
+      await fetch('/api/open-external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     }
   }
 

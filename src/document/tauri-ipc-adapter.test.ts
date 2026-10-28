@@ -131,4 +131,25 @@ describe('TauriIpcAdapter', () => {
     expect(result.success).toBe(true);
     expect(result.message).toBe('Updated to v0.2.0');
   });
+
+  it('calls /api/open-external on openExternal', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: true }),
+    } as Response);
+
+    await adapter.openExternal('https://example.com');
+    expect(fetchSpy).toHaveBeenCalledWith('/api/open-external', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://example.com' }),
+    }));
+  });
+
+  it('handles mailto scheme safely in openExternal', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await adapter.openExternal('mailto:user@example.com');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledWith('mailto:user@example.com', '_self');
+  });
 });
