@@ -389,10 +389,17 @@ fn handle_api_open_external(
 }
 
 fn open_in_browser(url: &str) {
-    if cfg!(target_os = "macos") {
-        let _ = Command::new("open").arg(url).spawn();
-    } else {
-        let _ = Command::new("xdg-open").arg(url).spawn();
+    #[cfg(not(test))]
+    {
+        if cfg!(target_os = "macos") {
+            let _ = Command::new("open").arg(url).spawn();
+        } else {
+            let _ = Command::new("xdg-open").arg(url).spawn();
+        }
+    }
+    #[cfg(test)]
+    {
+        let _ = url;
     }
 }
 
