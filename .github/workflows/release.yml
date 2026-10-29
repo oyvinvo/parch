@@ -2,62 +2,21 @@ name: Release Automation
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release Tag to build (e.g. v0.1.0)'
+        description: 'Release Tag to build (e.g. v0.2.0)'
         required: false
         default: ''
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
-  release-please:
-    name: Release Please (SemVer & Changelog)
-    if: startsWith(github.ref, 'refs/tags/v') != true
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-
-    steps:
-      - name: Run Release Please
-        uses: googleapis/release-please-action@v5
-        id: release
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-
-      - name: Auto-merge Release PR
-        if: ${{ steps.release.outputs.pr }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_PR: ${{ steps.release.outputs.pr }}
-        run: |
-          PR_NUMBER=$(echo "$RELEASE_PR" | jq -r '.number')
-          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
-            echo "Auto-merging Release PR #$PR_NUMBER..."
-            gh pr merge "$PR_NUMBER" --merge --auto --repo ${{ github.repository }} || gh pr merge "$PR_NUMBER" --merge --repo ${{ github.repository }}
-          fi
-
   build-linux-assets:
     name: Build & Publish Linux Release Assets
-    needs: release-please
-    if: |
-      always() &&
-      (
-        needs.release-please.outputs.release_created == 'true' ||
-        startsWith(github.ref, 'refs/tags/v') ||
-        github.event_name == 'workflow_dispatch'
-      )
     runs-on: ubuntu-latest
 
     steps:
@@ -85,9 +44,7 @@ jobs:
 
       - name: Determine Release Version & Tag
         run: |
-          if [ -n "${{ needs.release-please.outputs.tag_name }}" ]; then
-            TAG="${{ needs.release-please.outputs.tag_name }}"
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           elif [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG="${{ github.event.inputs.tag }}"
@@ -107,6 +64,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
           files: |
             release-dist/*.deb
             release-dist/*.tar.gz
@@ -116,14 +74,6 @@ jobs:
 
   build-macos-assets:
     name: Build & Publish macOS Release Assets
-    needs: release-please
-    if: |
-      always() &&
-      (
-        needs.release-please.outputs.release_created == 'true' ||
-        startsWith(github.ref, 'refs/tags/v') ||
-        github.event_name == 'workflow_dispatch'
-      )
     runs-on: macos-latest
 
     steps:
@@ -146,9 +96,7 @@ jobs:
 
       - name: Determine Release Version & Tag
         run: |
-          if [ -n "${{ needs.release-please.outputs.tag_name }}" ]; then
-            TAG="${{ needs.release-please.outputs.tag_name }}"
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           elif [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG="${{ github.event.inputs.tag }}"
@@ -168,6 +116,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
           files: |
             release-dist/Parch-*-macos-*.zip
             release-dist/parch-*-macos-*.tar.gz
