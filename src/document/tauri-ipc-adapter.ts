@@ -157,7 +157,7 @@ export class TauriIpcAdapter implements IIpcAdapter {
     }
     return {
       updateAvailable: false,
-      currentVersion: '0.1.0',
+      currentVersion: '0.2.0',
       latestVersion: null,
     };
   }

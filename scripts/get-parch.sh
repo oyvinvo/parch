@@ -36,10 +36,10 @@ if [ -z "$LATEST_TAG" ] && command -v curl >/dev/null 2>&1; then
   LATEST_TAG=$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
 fi
 
-# Fallback: default to v0.1.0
+# Fallback: default to v0.2.0
 if [ -z "$LATEST_TAG" ]; then
-  echo "Could not resolve latest release tag automatically, defaulting to v0.1.0..."
-  LATEST_TAG="v0.1.0"
+  echo "Could not resolve latest release tag automatically, defaulting to v0.2.0..."
+  LATEST_TAG="v0.2.0"
 fi
 
 VERSION="${LATEST_TAG#v}"

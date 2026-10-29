@@ -100,14 +100,14 @@ describe('TauriIpcAdapter', () => {
       ok: true,
       json: async () => ({
         updateAvailable: true,
-        currentVersion: '0.1.0',
-        latestVersion: '0.2.0',
+        currentVersion: '0.2.0',
+        latestVersion: '0.3.0',
       }),
     } as Response);
 
     const update = await adapter.checkUpdate();
     expect(update.updateAvailable).toBe(true);
-    expect(update.latestVersion).toBe('0.2.0');
+    expect(update.latestVersion).toBe('0.3.0');
   });
 
   it('handles offline state safely in checkUpdate', async () => {
